@@ -9,6 +9,8 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel
+from api import user
+
 
 #公式ドキュメントの実装
 
@@ -55,6 +57,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 app = FastAPI()
+app.include_router(user.router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -77,9 +80,17 @@ def get_password_hash(password):
 
 
 def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return UserInDB(**user_dict)
+    user_info = orm.user_select(username)
+    print("info:",user_info)
+    if user_info:
+        
+        return UserInDB(
+            username = user_info.name,
+            email= user_info.email,
+            full_name = user_info.name,
+            disabled = False,
+            hashed_password=user_info.password
+            )
 
 
 def authenticate_user(fake_db, username: str, password: str):
@@ -127,7 +138,6 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
-
 @app.post("/token")
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -148,9 +158,17 @@ async def login_for_access_token(
 
 @app.get("/users/me/", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
+    
     return current_user
 
+class updateRequest(BaseModel):
+    input_email: str
+    input_age: int
 
-@app.get("/users/me/items/")
-async def read_own_items(current_user: User = Depends(get_current_active_user)):
-    return [{"item_id": "Foo", "owner": current_user.username}]
+@app.post("/users/me/update")
+async def update_user_me(inputdata: updateRequest,current_user: User = Depends(get_current_active_user)):
+    orm.user_update(
+        current_user.username,
+        inputdata.input_email,
+        inputdata.input_age
+    )
