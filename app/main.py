@@ -4,13 +4,15 @@ from starlette.middleware.cors import CORSMiddleware
 import ORM.User as orm
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, File, UploadFile, responses
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from api import user
-
+from pathlib import Path
+import shutil
+import os
 
 #公式ドキュメントの実装
 
@@ -172,3 +174,38 @@ async def update_user_me(inputdata: updateRequest,current_user: User = Depends(g
         inputdata.input_email,
         inputdata.input_age
     )
+
+UPLOAD_DIR = Path(r"C:\Work\uploads")
+
+@app.post("/upload")
+async def create_upload_file(file: UploadFile = File(...)):
+    try:
+        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        save_path = UPLOAD_DIR / file.filename
+        
+        with save_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        return {"filename": file.filename, "save_path": str(save_path)}
+    finally:
+        file.file.close()
+        
+
+
+@app.get('/download')
+async def download(item: str):
+    return responses.FileResponse("C:/Work/uploads/"+item, filename='item')
+
+@app.get('/play')
+async def play(item: str):
+    return responses.FileResponse("C:/Work/uploads/"+item, filename='item')
+
+@app.get('/file-list')
+async def file_list():
+    dir_path = "C:/Work/uploads"
+
+    files_file = [
+        f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, f))
+    ]
+    print(files_file)
+    return files_file
